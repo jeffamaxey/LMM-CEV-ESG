@@ -27,31 +27,31 @@ sg.theme('DarkGrey2')
 '------------------------------'
 def changeRateCurve():
     'This function changes the module curve depending on the choice between inputing a manual curve and NSS parameters.'
-    
+
     '**** This function will not be run using any button but at the beginning of each calibration/projection, will be used. ****'
-    
+
     'Debug Assistance'
     '------------------'
     'i) Choice between NSS and Manual Curve:'
     'Sheet: Rate Curve - NSS - Choice'
     'Range: G8'
-     
+
     'ii) Inputs (NSS):'
     'Sheet: Rate Curve - NSS - Own Params'
     'Range: I9 (going down)'
-    
+
     # Define all the sheets to be used (Confirm these manually in the esgaviva2 excel fil)
     rateCurveNSSChoice = wb.sheets['Rate Curve - NSS - Choice']
     rateCurveInputs = wb.sheets['Rate Curve - Inputs']
     rateCurveOwnParams = wb.sheets['Rate Curve - NSS - Own Params']
     rateCurveResults = wb.sheets['Rate Curve - NSS - Results']
     rateCurveNSSOptimization = wb.sheets['Rate Curve - NSS - Optimization']
-    
+
     if (rateCurveNSSChoice.range('G8').value == 'YES'):
         if (rateCurveNSSChoice.range('G9').value == 'YES'):
             #Obtain all the inputs for the NSS (I9 of the  Rate Curve NSS Choice sheet)
             inputs = rateCurveOwnParams.range('I9').expand().value 
-            
+
             # Calibrate an NSS
             curveFunction = esgaviva.NelsonSiegelSvenssonCurve(beta0 = inputs[2],
                                                      beta1 = inputs[3],
@@ -59,36 +59,36 @@ def changeRateCurve():
                                                      beta3 = inputs[5],
                                                      tau1 = inputs[0],
                                                      tau2 = inputs[1])
-            
+
             # Run NSS with input parameters
             newCurve = curveFunction(np.linspace(1, 150, 150))
             print('Please note that the curve selected is the NSS Curve') # Will probably change this to a messagebox
-            
+
             # Write the results of the NSS Calibration to the Comparison Sheet
             rateCurveResults.range('I9').expand('down').value = [[elem] for elem in newCurve]
             sg.popup('NSS with own parameters selected')
-            
+
         else:
             maturities = rateCurveInputs.range('E9:E158').value
             rates = rateCurveInputs.range('G9:G158').value
-            
+
             # Find where rates are missing
             maturities = np.array(maturities)[np.where(np.array(rates) != None)[0]]
             rates = np.array(list(filter(None, rates)))
-            
+
             # Calibrate NSS
             curve, status = esgaviva.calibrate_nss_ols(maturities, rates)
-            
+
             # Obtain new Curve
             newCurve = curve(np.linspace(1, 150, 150))
-            
+
             # Write parameters to Excel File
             params = [curve.beta0, curve.beta1, curve.beta2, curve.beta3, curve.tau1, curve.tau2, status.fun, status.success]
-        
+
             # Write the results of the NSS Calibration to the Comparison Sheet
             rateCurveResults.range('I9').expand('down').value = [[elem] for elem in newCurve]
             rateCurveNSSOptimization.range('I13').value = [[param] for param in params]
-      
+
     else:
         # Obtain the interest rate curve manually input
         newCurve = rateCurveInputs.range('G9').expand().value
@@ -99,57 +99,57 @@ def changeRateCurve():
     if (len(newCurve) < 90):
         maturities = rateCurveInputs.range('E9:E158').value
         rates = rateCurveInputs.range('G9:G158').value
-        
+
         # Find where rates are missing
         maturities = np.array(maturities)[np.where(np.array(rates) != None)[0]]
         rates = np.array(list(filter(None, rates)))
-        
+
         # Calibrate NSS
         curve, status = esgaviva.calibrate_nss_ols(maturities, rates)
-        
+
         # Obtain new Curve
         newCurve = curve(np.linspace(1, 150, 150))
-        
+
         # Write parameters to Excel File
         params = [curve.beta0, curve.beta1, curve.beta2, curve.beta3, curve.tau1, curve.tau2, status.fun, status.success]
-    
+
         # Write the results of the NSS Calibration to the Comparison Sheet
         rateCurveResults.range('I9').expand('down').value = [[elem] for elem in newCurve]
         rateCurveNSSOptimization.range('I13').value = [[param] for param in params]
-        
 
-        
+
+
     # Transform curve to forwardCurve & zeroCouponCurve
     global  zeroCouponCurve, forwardCurve
-    
+
     'Change module forwardCurve and zeroCouponCurve'
     zeroCouponCurve = np.power(1/(1+np.array(newCurve)), np.arange(1, 151))
-    forwardCurve = (zeroCouponCurve[:len(zeroCouponCurve)-1]/zeroCouponCurve[1:])-1
-    
+    forwardCurve = zeroCouponCurve[:-1] / zeroCouponCurve[1:] - 1
+
     # Change the values in the esgaviva model
     esgaviva.zeroCouponCurve = zeroCouponCurve
     esgaviva.forwardCurve = forwardCurve 
-    
+
     # Save Curve
     book = esgaviva.load_workbook('Results\Audit Trail.xlsx')
     writer = pd.ExcelWriter('Results\Audit Trail.xlsx', engine = 'openpyxl')
     writer.book = book
-    writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
-    
+    writer.sheets = {ws.title: ws for ws in book.worksheets}
+
     pd.DataFrame(zeroCouponCurve).to_excel(writer, 
                                           "Initial Parameters", 
                                           startcol = 2, # Column F
                                           startrow = 1, # Line 59
                                           index = False, 
                                           header = False)
-    
+
     pd.DataFrame(zeroCouponCurve).to_excel(writer, 
                                       "Martingale Test (CEV)", 
                                       startcol = 2, # Column F
                                       startrow = 3, # Line 59
                                       index = False, 
                                       header = False)
-    
+
     writer.save()
 
 
@@ -183,52 +183,52 @@ def changeVolSurface():
     calibrationInputs = wb.sheets['Calibration - Inputs']
     calibrationMktVols = wb.sheets['Calibration - MktVols']
     calibrationWeights = wb.sheets['Calibration - Weights']
-    
-    
+
+
     if (calibrationInputs.range('I8') == 'MANUAL_INPUT'):
         # Obtain the market volatilities
         tenorsSurface = calibrationMktVols.range('G8').options(expand = 'right').value # Obtain tenors 
         expiriesSurface = calibrationMktVols.range('E10').options(expand = 'down').value # Obtain maturities
         volatilities = calibrationMktVols.range('G10').options(expand = 'table').value
-        
+
         # Convert tenorsSurface and expiriesSurface to integers
         tenorsSurface = [int(i) for i in tenorsSurface]
         expiriesSurface = [int(i) for i in expiriesSurface]
-        
+
         # Find the shape of the table
         R = len(volatilities)
         C = len(volatilities[0])
-        
+
         # Obtain the weights
         weights = calibrationWeights.range((10, 7), (10 + R-1, 7 + C-1)).options(empty = 0).value
-        
-        
+
+
         'These should be set to the volatilities in the esgaviva'
         # Convert to dataframe and save as volatility and weights LMM 
         volatilitiesLMMPlus = pd.DataFrame(volatilities, 
                                     index = expiriesSurface, 
                                     columns = tenorsSurface).unstack().reset_index(name ='Volatility')
-        
+
         weightsLMMPlus = pd.DataFrame(weights, 
                                     index = expiriesSurface, 
                                     columns = tenorsSurface).unstack().reset_index(name ='Volatility')
-        
+
         # Name the columns
         volatilitiesLMMPlus.columns = ['Tenor', 'Expiry', 'Value']
         weightsLMMPlus.columns = ['Tenor', 'Expiry', 'Value']
-    
-        
+
+
         'PRICE CALCULATION'
         # Calculate the swaption prices using Chi2 
         expiriesBachelier = weightsLMMPlus['Expiry'].to_numpy(int) 
         tenorsBachelier = weightsLMMPlus['Tenor'].to_numpy(int)
-    
+
         strikesLMMPlus = esgaviva.forwardSwapRateVect(expiriesBachelier, tenorsBachelier)
-        
+
         # Calculate bachelier prices
         normalPricesLMMPlus = esgaviva.normalPayerVect(1, strikesLMMPlus, strikesLMMPlus,
                                               expiriesBachelier, tenorsBachelier, volatilitiesLMMPlus['Value'])
-        
+
         'Assign values to esgaviva module'
         '----------------------------'
         esgaviva.volatilitiesLMMPlus = volatilitiesLMMPlus
@@ -237,25 +237,25 @@ def changeVolSurface():
         esgaviva.tenorsBachelier = tenorsBachelier
         esgaviva.strikesLMMPlus = strikesLMMPlus
         esgaviva.normalPricesLMMPlus = normalPricesLMMPlus 
-    
+
 
     # Otherwise fill data from the default dataset     
     else:
          fillDefaultData()
-        
+
     # Save Surface & Weights
     book = esgaviva.load_workbook('Results\Audit Trail.xlsx')
     writer = pd.ExcelWriter('Results\Audit Trail.xlsx', engine = 'openpyxl')
     writer.book = book
-    writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
-    
+    writer.sheets = {ws.title: ws for ws in book.worksheets}
+
     esgaviva.volatilitiesLMMPlus.pivot(index = 'Expiry', columns = 'Tenor', values = 'Value').to_excel(writer, 
                                           "Initial Parameters", 
                                           startcol = 5, # Column F
                                           startrow = 1, # Line 59
                                           index = True, 
                                           header = True)
-    
+
     esgaviva.weightsLMMPlus.pivot(index = 'Expiry', columns = 'Tenor', values = 'Value').to_excel(writer, 
                                       "Initial Parameters", 
                                       startcol = 5, # Column F
@@ -298,26 +298,25 @@ def iter_cb_Hagan(params, iter, resid):
 def miniMultiStart():
     calibMultiStart = wb.sheets['Calibration - MultiStart']
     calibrationInputs = wb.sheets['Calibration - Inputs']
-    
+
     # Number of iterations
     length = int(np.minimum(np.maximum(calibrationInputs.range('I36').value, 2), 500))
-    
+
     # Obtain all input parameters
     metaParams = calibrationInputs.range('I17:I18').value
     parameterTable = np.random.rand(length, 6)
     parameterTable = [list(param)+metaParams for param in parameterTable]
     calibMultiStart.range('G10').expand('table').value = 0
     calibMultiStart.range('G10').expand('table').value = parameterTable
-    
-    sg.popup(str(length) +' scenarios selected. Expected runtime: '+ str(length) + ' minutes')
-    
-    results = []
-    for paramSet in parameterTable: 
-        results.append(esgaviva.haganCalibratorPython(paramSet[:6], 
-                                                      eta = paramSet[6], 
-                                                      delta = paramSet[7],
-                                                       iter_cb = None))
-        
+
+    sg.popup(f'{length} scenarios selected. Expected runtime: {length} minutes')
+
+    results = [
+        esgaviva.haganCalibratorPython(
+            paramSet[:6], eta=paramSet[6], delta=paramSet[7], iter_cb=None
+        )
+        for paramSet in parameterTable
+    ]
     # Write results to Excel
     calibMultiStart.range('R10').value = results
     sg.popup('Multistart Calibration completed. Results in the Multistart page.',"",
@@ -328,44 +327,44 @@ def miniMultiStart():
 def calibrator():
     # Select new interest rate curve
     changeRateCurve()
-    
+
     # Choose the volatility surface 
     changeVolSurface()
-    
+
     calibrationInputs = wb.sheets['Calibration - Inputs']
     rateCurveOwnParams = wb.sheets['Rate Curve - NSS - Own Params']
     calibrationResults = wb.sheets['Calibration - Results - Retriev']
     calibrationBacktestPrice = wb.sheets['Calibration - Backtest - Price']
     calibrationBacktestVols = wb.sheets['Calibration - Backtest - Vols']
-    
+
     # To be used in the projection section
     global eta, delta
-    
+
     # Select inputs ie initialization, upper and lower bounds
     inputs = calibrationInputs.range('I11').expand().value
     upperBounds = calibrationInputs.range('I28').expand().value
     lowerBounds = calibrationInputs.range('I21').expand().value
-    
+
     eta, delta = inputs[6], inputs[7]
-    
+
     # Obtain the choic of calibration
     calibrationChoice = inputs[8]
-    
+
     # Clear the two result tables
     calibrationResults.range('G15').expand('table').clear()
     calibrationResults.range('R15').expand('table').clear()
-    
+
     # Create the global variable containing the results
     global resultsCalibration
-    
+
     # Run Multistart if selected
     if (calibrationInputs.range('I35').value ==  'YES'):
         miniMultiStart()
-        
+
     else:
+        start = time()
         # Run Calibration based on the options selected in Excel
-        if (calibrationChoice == 'Chi2'):
-            start = time()
+        if calibrationChoice == 'Chi2':
             resultsCalibration = esgaviva.chiSquareCalibratorPython(initialValues = inputs[:6], 
                                                  lowerBounds = lowerBounds, 
                                                  upperBounds = upperBounds, 
@@ -374,32 +373,29 @@ def calibrator():
                                                  iter_cb = iter_cb_Chi)
             end = time()
             calibrationResults.range('G11').value = resultsCalibration[:6]
-            
+
             calibrationResults.range('M10').value = (end - start)/60
-            
+
             # Save Surface & Weights
             book = esgaviva.load_workbook('Results\Results Summary.xlsx')
             writer = pd.ExcelWriter('Results\Results Summary.xlsx', engine = 'openpyxl')
             writer.book = book
-            writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
-            
+            writer.sheets = {ws.title: ws for ws in book.worksheets}
+
             pd.DataFrame(inputs[:8]).to_excel(writer, 
                                                   "Calibration Outputs", 
                                                   startcol = 1, # Column F
                                                   startrow = 2, # Line 59
                                                   index = False, 
                                                   header = False)
-            
+
             pd.DataFrame(resultsCalibration[:6].extend([eta, delta])).to_excel(writer, 
                                                   "Calibration Outputs", 
                                                   startcol = 2, # Column F
                                                   startrow = 2, # Line 59
                                                   index = False, 
                                                   header = False)
-            writer.save()
-            
-        elif (calibrationChoice == 'Hagan '):
-            start = time()
+        elif calibrationChoice == 'Hagan ':
             resultsCalibration = esgaviva.haganCalibratorPython(inputs[:6], 
                                                  upperBounds, 
                                                  lowerBounds, 
@@ -407,33 +403,30 @@ def calibrator():
                                                  delta = inputs[7],
                                                  iter_cb = iter_cb_Hagan)
             end = time()
-            
+
             calibrationResults.range('R11').value = resultsCalibration[:6]
             calibrationResults.range('X10').value = (end - start)/60
-            
+
             # Save Surface & Weights
             book = esgaviva.load_workbook('Results\Audit Trail.xlsx')
             writer = pd.ExcelWriter('Results\Audit Trail.xlsx', engine = 'openpyxl')
             writer.book = book
-            writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
-            
+            writer.sheets = {ws.title: ws for ws in book.worksheets}
+
             pd.DataFrame(inputs[:8]).to_excel(writer, 
                                                   "Calibration Outputs", 
                                                   startcol = 1, # Column F
                                                   startrow = 2, # Line 59
                                                   index = False, 
                                                   header = False)
-            
+
             pd.DataFrame(resultsCalibration).to_excel(writer, 
                                                   "Calibration Outputs", 
                                                   startcol = 3, # Column F
                                                   startrow = 2, # Line 59
                                                   index = False, 
                                                   header = False)
-            writer.save()
-            
         else:
-            start = time()
             resultsComparative = esgaviva.fullCalibratorPython(inputs[:6], 
                                 upperBounds, 
                                  lowerBounds, 
@@ -443,48 +436,48 @@ def calibrator():
                                  iter_Hagan = iter_cb_Hagan)
             end = time()
             calibrationResults.range('X10').value = (end - start)/60
-            
+
             # The default choice is the Chi2
             resultsCalibration = resultsComparative[1]
             calibrationResults.range('G11').value = resultsComparative[0][:6]
             calibrationResults.range('R11').value = resultsComparative[1][:6]
-            
+
             # Save Surface & Weights
             book = esgaviva.load_workbook('Results\Audit Trail.xlsx')
             writer = pd.ExcelWriter('Results\Audit Trail.xlsx', engine = 'openpyxl')
             writer.book = book
-            writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
-            
+            writer.sheets = {ws.title: ws for ws in book.worksheets}
+
             pd.DataFrame(inputs[:8]).to_excel(writer, 
                                                   "Calibration Outputs", 
                                                   startcol = 1, # Column F
                                                   startrow = 2, # Line 59
                                                   index = False, 
                                                   header = False)
-            
+
             pd.DataFrame(resultsComparative[0][:6].extend([eta, delta])).to_excel(writer, 
                                                   "Calibration Outputs", 
                                                   startcol = 2, # Column F
                                                   startrow = 2, # Line 59
                                                   index = False, 
                                                   header = False)
-            
+
             pd.DataFrame(resultsComparative[1][:6].extend([eta, delta])).to_excel(writer,
                                               "Calibration Outputs", 
                                               startcol = 3, # Column F
                                               startrow = 2, # Line 59
                                               index = True, 
                                               header = True)
-            writer.save()
-        
+        writer.save()
+
         'PRICE CALCULATION MODEL'
         '----------------------------'
         # Calculate the swaption prices using Chi2 
-        expiries = esgaviva.weightsLMMPlus['Expiry'].to_numpy(int) 
+        expiries = esgaviva.weightsLMMPlus['Expiry'].to_numpy(int)
         tenors = esgaviva.weightsLMMPlus['Tenor'].to_numpy(int)
-    
+
         strikes = esgaviva.forwardSwapRateVect(expiries, tenors)
-        
+
         # Calculate chi square prices
         chiSquarePrices = esgaviva.calibrationBlackVect(1, strikes, 
                                                           strikes, 
@@ -497,10 +490,10 @@ def calibrator():
                                                           resultsCalibration[4],
                                                           resultsCalibration[5], 
                                                           resultsCalibration[6],
-                                                          resultsCalibration[7])  
+                                                          resultsCalibration[7])
         # Calculate bachelier prices
         normalPrices = esgaviva.normalPayerVect(1, strikes, strikes, expiries, tenors, esgaviva.volatilitiesLMMPlus['Value'])
-        
+
         # Compare this to model prices
         errors = np.abs((normalPrices - chiSquarePrices)/normalPrices)
         cols = len(esgaviva.weightsLMMPlus.pivot(index = 'Expiry', columns = 'Tenor', values = 'Value'))
@@ -508,16 +501,16 @@ def calibrator():
         errors = errors.reshape((int(rows), cols)).T
         Chi2Prices = chiSquarePrices.reshape((int(rows), cols)).T
         normalRectPrices = normalPrices.reshape((int(rows), cols)).T
-        
+
         calibrationBacktestPrice.range('G10').options(np.array, expand = 'table').value = errors
         calibrationBacktestPrice.range('G28').options(np.array, expand = 'table').value = Chi2Prices 
-    
+
         # Save to Summary File
         book = esgaviva.load_workbook('Results\Audit Trail.xlsx')
         writer = pd.ExcelWriter('Results\Audit Trail.xlsx', engine = 'openpyxl')
         writer.book = book
-        writer.sheets = dict((ws.title, ws) for ws in book.worksheets)  
-        
+        writer.sheets = {ws.title: ws for ws in book.worksheets}  
+
         pd.DataFrame(errors, 
                      index = np.unique(expiries), 
                      columns = np.unique(tenors)).to_excel(writer, 
@@ -534,7 +527,7 @@ def calibrator():
                                       startrow = 20, # Line 21
                                       index = True, 
                                       header = True)
-                                                           
+
         pd.DataFrame(normalRectPrices, 
                      index = np.unique(expiries), 
                      columns = np.unique(tenors)).to_excel(writer, 
@@ -543,11 +536,11 @@ def calibrator():
                                       startrow = 37, # Line 38
                                       index = True, 
                                       header = True)
-                                                         
-        
+
+
         writer.save()
         sg.popup('Calibration Completed')
-        
+
         'BACHELIER VOLATILITY CALCULATION'
         '------------------------------------'
         # Turn Prices to volatilities
@@ -556,7 +549,7 @@ def calibrator():
                             esgaviva.volatilitiesLMMPlus['Value'])
         volErrors = volErrors.to_numpy().reshape((int(rows), cols)).T
         bachVols = bachelierModelVolatilities.reshape((int(rows), cols)).T
-        
+
         calibrationBacktestVols.range('G10').options(np.array, expand = 'table').value = volErrors
         calibrationBacktestVols.range('G28').options(np.array, expand = 'table').value = bachVols
         
@@ -566,28 +559,28 @@ def calibrator():
 def MonteCarlo():
     # Change Rate Curve
     changeRateCurve()
-    
+
     # Choose the volatility surface 
     changeVolSurface()
-    
+
     MCInputs = wb.sheets['MC - Inputs']
     MCResultsPrix = wb.sheets['MC - Results - Price']
     MCResultsVols = wb.sheets['MC - Results - Vols']
     calibrationInputs = wb.sheets['Calibration - Inputs']
     calibrationResults = wb.sheets['Calibration - Results - Retriev']
-    
+
     # Obtain the vector of inputs
     inputs = MCInputs.range('I8').expand('down').value
-    
-    
+
+
     # Eta and delta declared
     resultsCalibration = calibrationResults.range('R11').expand('right').value
     eta, delta = calibrationInputs.range('I17').value, calibrationInputs.range('I18').value
-    
-    simus = int(inputs[1])
-    
+
     # Run Monte Carlo Simulation depending on the case chosen
     if (inputs[5] == 'Python'): 
+        simus = int(inputs[1])
+
         MCPrices = [esgaviva.MonteCarloPricer(forwardCurve, expiry, tenor, resultsCalibration[0], 
                          resultsCalibration[1], 
                          resultsCalibration[2], 
@@ -596,7 +589,7 @@ def MonteCarlo():
                          resultsCalibration[5], eta, esgaviva.betas, delta, simus) for 
                         expiry, tenor in list(zip(esgaviva.expiriesBachelier, 
                                                   esgaviva.tenorsBachelier))]
-    
+
     elif (inputs[5] == 'YE19_BH'): 
         browniansBH = pd.read_excel(esgaviva.gaussiansLocation, 
                                     names = ['Trial', 'Timestep', 'Gaussian1', 'Gaussian2'], 
@@ -605,7 +598,7 @@ def MonteCarlo():
         simulations = int(len(browniansBH)/maxCol)
         browniensBH1 = browniansBH['Gaussian1'].to_numpy().reshape((simulations, maxCol))
         browniensBH2 = browniansBH['Gaussian2'].to_numpy().reshape((simulations, maxCol))
-        
+
         MCPrices = [esgaviva.MonteCarloPricerBH(esgaviva.forwardCurve, expiry, tenor, resultsCalibration[0], 
                          resultsCalibration[1], 
                          resultsCalibration[2], 
@@ -617,61 +610,75 @@ def MonteCarlo():
                                                   esgaviva.tenorsBachelier))]
     else:
         sg.popup('Under Construction')
-        
+
     # Reshape MC Prices
     cols = len(esgaviva.weightsLMMPlus.pivot(index = 'Expiry', columns = 'Tenor', values = 'Value'))
     rows = len(MCPrices)/cols
-    
+
     # Transform vols to prices
     MCVols = esgaviva.volNormalATMFunctionVect(esgaviva.weightsLMMPlus['Expiry'], 
                                       esgaviva.weightsLMMPlus['Tenor'], 
                                       MCPrices)
-    
+
     # Find Errors
     MCPriceErrors = np.abs((esgaviva.normalPricesLMMPlus - MCPrices)/esgaviva.normalPricesLMMPlus)
     MCVolErrors = np.abs((esgaviva.volatilitiesLMMPlus['Value'] - MCVols)/
                                  esgaviva.volatilitiesLMMPlus['Value'])
-    
+
     # Write vols and price errors
     MCResultsPrix.range('G10').value = MCPriceErrors.reshape((int(rows), cols)).T
     MCResultsVols.range('G10').value = MCVolErrors.to_numpy().reshape((int(rows), cols)).T
-    
+
     # Write Prices
-    MCResultsPrix.range('G28').value = np.array(MCPrices).reshape((int(rows), int(cols))).T
-    MCResultsVols.range('G28').value = MCVols.reshape((int(rows), int(cols))).T
-    
+    MCResultsPrix.range('G28').value = (
+        np.array(MCPrices).reshape((int(rows), cols)).T
+    )
+    MCResultsVols.range('G28').value = MCVols.reshape((int(rows), cols)).T
+
     # Save Surface & Weights
     book = esgaviva.load_workbook('Results\Audit Trail.xlsx')
     writer = pd.ExcelWriter('Results\Audit Trail.xlsx', engine = 'openpyxl')
     writer.book = book
-    writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
-    pd.DataFrame(np.array(MCPriceErrors).reshape((int(rows), int(cols))).T, 
-                 index = np.unique(esgaviva.expiriesBachelier),
-                 columns = np.unique(esgaviva.tenorsBachelier)).to_excel(writer, 
-                                                                         "Monte Carlo Test", 
-                                                                            startcol = 1, # Column F
-                                                                               startrow = 2, # Line 38
-                                                                               index = True, 
-                                                                               header = True)
-    
-    pd.DataFrame(np.array(MCPrices).reshape((int(rows), int(cols))).T, 
-             index = np.unique(esgaviva.expiriesBachelier), 
-             columns = np.unique(esgaviva.tenorsBachelier)).to_excel(writer, 
-                                                                     "Monte Carlo Test", 
-                                                                            startcol = 1, # Column F
-                                                                               startrow = 17, # Line 38
-                                                                               index = True, 
-                                                                               header = True)
-    
-    pd.DataFrame(np.array(MCVols).reshape((int(rows), int(cols))).T, 
-                 index = np.unique(esgaviva.expiriesBachelier), 
-                 columns = np.unique(esgaviva.tenorsBachelier)).to_excel(writer, 
-                                                                         "Monte Carlo Test", 
-                                                                            startcol = 1, # Column F
-                                                                               startrow = 32, # Line 38
-                                                                               index = True, 
-                                                                               header = True)
-    
+    writer.sheets = {ws.title: ws for ws in book.worksheets}
+    pd.DataFrame(
+        np.array(MCPriceErrors).reshape((int(rows), cols)).T,
+        index=np.unique(esgaviva.expiriesBachelier),
+        columns=np.unique(esgaviva.tenorsBachelier),
+    ).to_excel(
+        writer,
+        "Monte Carlo Test",
+        startcol=1,
+        startrow=2,
+        index=True,
+        header=True,
+    )
+
+    pd.DataFrame(
+        np.array(MCPrices).reshape((int(rows), cols)).T,
+        index=np.unique(esgaviva.expiriesBachelier),
+        columns=np.unique(esgaviva.tenorsBachelier),
+    ).to_excel(
+        writer,
+        "Monte Carlo Test",
+        startcol=1,
+        startrow=17,
+        index=True,
+        header=True,
+    )
+
+    pd.DataFrame(
+        np.array(MCVols).reshape((int(rows), cols)).T,
+        index=np.unique(esgaviva.expiriesBachelier),
+        columns=np.unique(esgaviva.tenorsBachelier),
+    ).to_excel(
+        writer,
+        "Monte Carlo Test",
+        startcol=1,
+        startrow=32,
+        index=True,
+        header=True,
+    )
+
     writer.save()
     
 

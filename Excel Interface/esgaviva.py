@@ -120,11 +120,8 @@ class SmithWilson:
         mu = np.exp(- self.UFR*(t+uj))
         maxT = self.alpha * np.maximum(t, uj)
         minT = self.alpha * np.minimum(t, uj)
-        
-        # We define the Wilson kernel function
-        wj = mu * (minT - 0.5 * np.exp(-maxT)*(np.exp(minT) - np.exp(-minT)))
-        
-        return (wj)
+
+        return mu * (minT - 0.5 * np.exp(-maxT)*(np.exp(minT) - np.exp(-minT)))
     
     def wilsonVectorFunction(self, inputMaturities):
         wilsonMatrix = np.zeros((len(inputMaturities), len(self.maturities))) 
@@ -138,23 +135,19 @@ class SmithWilson:
     def calibrate(self):
         #Create the matrix W of Kernels
         self.WMatrix = self.wilsonVectorFunction(self.maturities)
-                
+
         #Invert the matrix
         #Recall that our parameters are W^-1 * (ZCPrices - muVector)
         WMatrixInv = np.linalg.inv(self.WMatrix) # Invert the kernel
         muVector = np.exp(-self.UFR * self.maturities)
-        
-        SWParams = WMatrixInv.dot(self.ZCPrices  - muVector) # zeta = W(inverse) * (ZCprice - mu)
-        
-        return (SWParams)
+
+        return WMatrixInv.dot(self.ZCPrices  - muVector)
     
     'Fit Curve'
     def curve(self):
         params = self.calibrate() #Obtain parameters
         parametrizedWilson = self.wilsonVectorFunction(np.arange(1, 151)).dot(params) # Fit full EIOPA Curve
-        result = np.exp(-self.UFR * np.arange(1, 151)) + parametrizedWilson
-                    
-        return(result)
+        return np.exp(-self.UFR * np.arange(1, 151)) + parametrizedWilson
        
 
 
@@ -187,14 +180,13 @@ def blackPayerShifted(N, S0, K, expiry, tenor, sigma, delta):
     delta = shift on the Black Model'''     
     # Find Zero Coupon Price at each date and calculate PVBP
     PVBP = np.sum(zeroCouponCurve[expiry:expiry+tenor])
-    
+
     # Define Black Parameters
     T = expiry
     d1 = (log((S0+delta)/(K + delta)) + 0.5*(pow(sigma,2)*T))/(sigma * sqrt(T))
     d2 = d1 - sigma*sqrt(T)
-    
-    price = N*PVBP * ((S0+delta)*stats.norm.cdf(d1) - (K+delta)*stats.norm.cdf(d2))
-    return(price)
+
+    return N*PVBP * ((S0+delta)*stats.norm.cdf(d1) - (K+delta)*stats.norm.cdf(d2))
 
 
 # Normal Pricer - Payer
@@ -210,14 +202,18 @@ def normalPayer(N, S0, K, expiry, tenor, sigma):
     
     # Find Zero Coupon Price at each date and calculate PVBP
     PVBP = np.sum(zeroCouponCurve[expiry:expiry+tenor])
-    
-     # Define Black Parameters
+
     T = expiry
     d1 = (S0 - K)/(sigma * sqrt(T))
-    
-    #Calculate Price
-    price = N * PVBP * ((S0 - K)*stats.norm.cdf(d1) + (sigma * sqrt(T)* exp(-0.5 * pow(d1, 2)))/sqrt(2 * pi))
-    return(price)
+
+    return (
+        N
+        * PVBP
+        * (
+            (S0 - K) * stats.norm.cdf(d1)
+            + (sigma * sqrt(T) * exp(-0.5 * pow(d1, 2))) / sqrt(2 * pi)
+        )
+    )
 
 # Normal Pricer - Receiver
 ######################################
@@ -231,14 +227,18 @@ def normalReceiver(N, S0, K, expiry, tenor, sigma):
     expiry, tenor, sigma are self explanatory'''
     # Find Zero Coupon Price at each date and calculate PVBP
     PVBP = np.sum(zeroCouponCurve[expiry:expiry+tenor])
-    
-     # Define Black Parameters
+
     T = expiry
     d1 = (S0 - K)/(sigma * sqrt(T))
-    
-    #Calculate Price
-    price = N * PVBP * ((K - S0)*stats.norm.cdf(-d1) + (sigma * sqrt(T)* exp(-0.5 * pow(d1, 2)))/sqrt(2 * pi))
-    return(price)
+
+    return (
+        N
+        * PVBP
+        * (
+            (K - S0) * stats.norm.cdf(-d1)
+            + (sigma * sqrt(T) * exp(-0.5 * pow(d1, 2))) / sqrt(2 * pi)
+        )
+    )
 
 # Black Shifted - Payer
 ######################################
@@ -253,14 +253,20 @@ def blackShifted(N, S0, K, expiry, tenor, sigma, delta):
     delta = Shift on the Black Model'''
     # Find Zero Coupon Price at each date and calculate PVBP
     PVBP = np.sum(zeroCouponCurve[expiry:expiry+tenor])
-    
+
     # Define Black Parameters
     T = expiry
     d1 = (log((S0+delta)/(K + delta)) + 0.5*(pow(sigma,2)*T))/(sigma * sqrt(T))
     d2 = d1 - sigma*sqrt(T)
-    
-    price = N * PVBP * ((S0+delta)*stats.norm.cdf(d1) - (K+delta)*stats.norm.cdf(d2))
-    return(price)
+
+    return (
+        N
+        * PVBP
+        * (
+            (S0 + delta) * stats.norm.cdf(d1)
+            - (K + delta) * stats.norm.cdf(d2)
+        )
+    )
 
 # Black Shifted - Payer
 ######################################
@@ -274,14 +280,13 @@ def blackShiftedCalib(expiry, tenor, sigma, delta):
     K = forwardSwapRateCalib(expiry, tenor)
     # Find Zero Coupon Price at each date and calculate PVBP
     PVBP = np.sum(zeroCouponCurve[expiry:expiry+tenor])
-    
+
     # Define Black Parameters
     T = expiry
     d1 = (log((S0+delta)/(K + delta)) + 0.5*(pow(sigma,2)*T))/(sigma * sqrt(T))
     d2 = d1 - sigma*sqrt(T)
-    
-    price = PVBP * ((S0+delta)*stats.norm.cdf(d1) - (K+delta)*stats.norm.cdf(d2))
-    return(price)
+
+    return PVBP * ((S0+delta)*stats.norm.cdf(d1) - (K+delta)*stats.norm.cdf(d2))
 
 
 '''IMPLICIT (BACHELIER) VOLATILITY FUNCTIONS
@@ -296,8 +301,7 @@ def imp_vol_payer_Newton(N, S0, K, expiry, tenor,Price):
     Price = Swaption Price'''
     
     func = lambda sigma: np.power(normalPayer(N, S0, K, expiry, tenor, sigma) - Price, 2.0)
-    vol  = optimize.newton(func, 0.1, tol = 1e-5, maxiter=100000)
-    return(vol)
+    return optimize.newton(func, 0.1, tol = 1e-5, maxiter=100000)
 
 # Nelder Mead Algorithm
 def imp_vol_payer_NMead(N, S0, K, expiry, tenor,Price):
@@ -322,8 +326,7 @@ def imp_vol_payer_toms748(N, S0, K, expiry, tenor,Price):
     delta = shift on the Black Model
     Price = Swaption Price'''
     func = lambda sigma: np.power(normalPayer(N, S0, K, expiry, tenor, sigma) - Price, 1.0)
-    vol  = optimize.toms748(func,a = -1, b = 1, xtol = 1e-5)
-    return(vol)
+    return optimize.toms748(func,a = -1, b = 1, xtol = 1e-5)
 
 def volNormalATMFunction(expiry, tenor, price):
     '''Use the classical Nelder Mead Algorithm to find the implied Bachelier vol of a payer swaption
@@ -332,9 +335,8 @@ def volNormalATMFunction(expiry, tenor, price):
     expiry, tenor are self explanatory
     Price = Swaption Price'''
     PVBP = np.sum(zeroCouponCurve[expiry:expiry+tenor])
-    
-    volNormal = (price /PVBP) * np.sqrt(2 * pi/expiry)
-    return (volNormal)
+
+    return (price /PVBP) * np.sqrt(2 * pi/expiry)
 
 
 '''VECTORIZING ALL FUNCTIONS
@@ -514,13 +516,11 @@ def sigma_CEV_Hagan(expiry, tenor, fZero, gamma, a, b, c, d, eta, delta):
     Please reference the PCA volatility description in the documentation of the DD LFM CEV.'''
     sigma =  sigmaAlphaBetaHagan(expiry, tenor, fZero, gamma, a, b, c, d, eta, delta)
     Sav = forwardSwapRateCalib(expiry, tenor) + delta
-    
+
     term1 = sigma/np.power(Sav, 1 - eta)
     term4 = (np.power((1 - eta)*sigma,2)*expiry)/(24 * np.power(Sav,2 - 2*eta))
-   
-    sigma_black = term1 * (1 + term4)
-    
-    return(sigma_black)
+
+    return term1 * (1 + term4)
 
 
 '''CHI SQUARE PAYER WITH PYTHON 
@@ -547,25 +547,26 @@ def calibrationChiSquarePayerPython(N, S0, K, expiry, tenor, fZero, gamma, a, b,
     * Function produces negative values for swaptions with very tenor = 1 and 2'''
     S0 = forwardSwapRateCalib(expiry, tenor)
     K = forwardSwapRateCalib(expiry, tenor)
-    
+
     # Find Zero Coupon Price at each date and calculate PVBP
     PVBP = np.sum(zeroCouponCurve[expiry:expiry+tenor])
-    
+
     # Parameters for input into Chi Square CDF
     sigmaSquaredT =  sigmaAlphaBetaPCA(expiry, tenor, fZero, gamma, a, b, c, d, eta, delta)
     d = (pow(K+delta,2 - 2*eta))/(pow(1 - eta,2)* sigmaSquaredT)
     b = 1/(1 - eta)
     f = (pow(S0+delta, 2 - 2*eta))/(pow(1 - eta, 2)* sigmaSquaredT)
 
-    # Calculate Price
-    price = PVBP * ((S0+delta)*(1 - stats.ncx2.cdf(d, b+2, f)) - (K+delta)*(stats.ncx2.cdf(f, b, d)))
-    return(price)
+    return PVBP * (
+        (S0 + delta) * (1 - stats.ncx2.cdf(d, b + 2, f))
+        - (K + delta) * (stats.ncx2.cdf(f, b, d))
+    )
 
 
 
 ''' Black Pricer - Payer
 =============================='''
-def calibrationBlackHaganPayer(N, S0, K, expiry, tenor, fZero, gamma, a, b, c, d, eta, delta):    
+def calibrationBlackHaganPayer(N, S0, K, expiry, tenor, fZero, gamma, a, b, c, d, eta, delta):
     '''Calculates the swaption Payer prices using the Hagan approximation 
     (Please refer to Hagan Woodward documentation on CEV approximation(1998))
     
@@ -581,16 +582,15 @@ def calibrationBlackHaganPayer(N, S0, K, expiry, tenor, fZero, gamma, a, b, c, d
     Please reference the PCA volatility description in the documentation of the DD LFM CEV.'''     
     # Find Zero Coupon Price at each date and calculate PVBP
     PVBP = np.sum(zeroCouponCurve[expiry:expiry+tenor])
-    
+
     sigma = sigma_CEV_Hagan(expiry, tenor, fZero, gamma, a, b, c, d, eta, delta)
-    
+
     # Define Black Parameters
     T = expiry
     d1 = (log((S0+delta)/(K+delta)) + 0.5*(pow(sigma,2)*T))/(sigma * sqrt(T))
     d2 = d1 - sigma*sqrt(T)
-    
-    price = PVBP * ((S0+delta)*stats.norm.cdf(d1) - (K+delta)*stats.norm.cdf(d2))
-    return(price)
+
+    return PVBP * ((S0+delta)*stats.norm.cdf(d1) - (K+delta)*stats.norm.cdf(d2))
 
 
 
@@ -656,7 +656,7 @@ def chiSquareCalibratorPython(initialValues = [0.1,0.1,0.1,0.1,0.1,0.1],
     params.add('b',value = initialValues[3], min = lowerBounds[3], max = upperBounds[3])
     params.add('c', value = initialValues[4], min = lowerBounds[4], max = upperBounds[4])
     params.add('d', value = initialValues[5], min = lowerBounds[5], max = upperBounds[5])
-    
+
     # Objective Function
     objectiveFunctionLMMPlus = lambda test: weightsLMMPlus['Value'].to_numpy() *  ( normalPricesLMMPlus - 
         calibrationChiSquarePayerPythonVect(1.0, strikesLMMPlus, 
@@ -670,8 +670,8 @@ def chiSquareCalibratorPython(initialValues = [0.1,0.1,0.1,0.1,0.1,0.1],
                         test['c'].value,
                         test['d'].value,
                eta, delta))/normalPricesLMMPlus       
-    
-   
+
+
     '''OPTIMIZE PARAMETERS PYTHON
     =============================='''
     try:
@@ -690,15 +690,17 @@ def chiSquareCalibratorPython(initialValues = [0.1,0.1,0.1,0.1,0.1,0.1],
         print('    i)   Incorrect format of inputs (vol surface or weights.')
         print('    ii)  Boundaries & Inputs should be in NUMERIC format.')
         print('    iii) Saturation of algorithm/Impossible to find solution.')
-           
-    finalResults = [result.params['fZero'].value, 
-            result.params['gamma'].value, 
-            result.params['a'].value, 
-            result.params['b'].value, 
-            result.params['c'].value,
-            result.params['d'].value, eta, delta]
-    
-    return(finalResults)
+
+    return [
+        result.params['fZero'].value,
+        result.params['gamma'].value,
+        result.params['a'].value,
+        result.params['b'].value,
+        result.params['c'].value,
+        result.params['d'].value,
+        eta,
+        delta,
+    ]
 
 # Calibration Function (Python Version)
 #############################################
@@ -751,7 +753,7 @@ def haganCalibratorPython(initialValues = [0.1,0.1,0.1,0.1,0.1,0.1],
     params.add('b',value = initialValues[3], min = lowerBounds[3], max = upperBounds[3])
     params.add('c', value = initialValues[4], min = lowerBounds[4], max = upperBounds[4])
     params.add('d', value = initialValues[5], min = lowerBounds[5], max = upperBounds[5])
-    
+
     # Objective Function
     objectiveFunctionLMMPlus = lambda test: weightsLMMPlus['Value'].to_numpy() *  ( normalPricesLMMPlus - 
         calibrationBlackVect(1.0, strikesLMMPlus, 
@@ -765,8 +767,8 @@ def haganCalibratorPython(initialValues = [0.1,0.1,0.1,0.1,0.1,0.1],
                         test['c'].value,
                         test['d'].value,
                eta, delta))/normalPricesLMMPlus       
-    
-   
+
+
     '''OPTIMIZE PARAMETERS PYTHON
     =============================='''
     try:
@@ -785,15 +787,17 @@ def haganCalibratorPython(initialValues = [0.1,0.1,0.1,0.1,0.1,0.1],
         print('    i)   Incorrect format of inputs (vol surface or weights.')
         print('    ii)  Boundaries & Inputs should be in NUMERIC format.')
         print('    iii) Saturation of algorithm/Impossible to find solution.')
-           
-    finalResults = [result.params['fZero'].value, 
-            result.params['gamma'].value, 
-            result.params['a'].value, 
-            result.params['b'].value, 
-            result.params['c'].value,
-            result.params['d'].value, eta, delta]
-    
-    return(finalResults)
+
+    return [
+        result.params['fZero'].value,
+        result.params['gamma'].value,
+        result.params['a'].value,
+        result.params['b'].value,
+        result.params['c'].value,
+        result.params['d'].value,
+        eta,
+        delta,
+    ]
 
 def fullCalibratorPython(initialValues = [0.1,0.1,0.1,0.1,0.1,0.1], 
                               lowerBounds = [0,0,0,0,0,0], 
@@ -940,26 +944,28 @@ def BHfullSimulator(forwardCurve, fZero, gamma, a, b, c, d, eta, betas, delta,
         simulations = int(len(browniansBH)/maxCol)
         browniensBH1 = browniansBH['Gaussian1'].to_numpy().reshape((simulations, maxCol))
         browniensBH2 = browniansBH['Gaussian2'].to_numpy().reshape((simulations, maxCol))
-        
+
         # Where results will be saved
         simulatedCurves = []
         deflateurs = []
-        
+
         for i in np.arange(simulations, step = 1):
             results = BHSingleSimulator(forwardCurve, fZero, gamma, a, b, c, d, eta, 
                               betas, delta, browniensBH1[i], browniensBH2[i])
             # Simulate
             simulatedCurves.append(results[0])
             deflateurs.append(results[1])
-            
+
         end = time()
         print("")
         print("FORWARD SCENARIO SIMULATION COMPLETE")
         print('-------------------------------')
-        print('BH Simulation successfully completed in: '+ str(round((end- start)/60, 2)) + ' minutes')
-        
+        print(
+            f'BH Simulation successfully completed in: {str(round((end - start) / 60, 2))} minutes'
+        )
+
         return([simulatedCurves, deflateurs])
-        
+
     except:
         print('Error encountered. Please ensure BH brownians are in the correct format.')
         sys.exit(1)
@@ -1103,36 +1109,32 @@ def fullSimulator(forwardCurve, fZero, gamma, a, b, c, d, eta, betas, delta,
     gaussians1 = []
     gaussians2 = []
     deflateurs = []
-    
+
     # Use gaussians from sobol sequence
     timeSteps = maxProjectionYear + maxMaturity
-    
+
     # Set optimal seed
     np.random.seed(141) # Optimal seed from 1000 seeds tested
-    
+
     gaussiansFull = np.random.randn(int(simulations/2), 90, 2)
-      
+
     for simu in np.arange(int(simulations/2)):
         results = UnitSimulator(forwardCurve, fZero, gamma, a, b, c, d, eta, betas, delta, 
                                 gaussiansFull[simu], 
                                 maxProjectionYear, maxMaturity)
-        
-        # Simulate
-        simulatedCurves.append(results[0])
-        simulatedCurves.append(results[1])
-        gaussians1.append(results[2][0])
-        gaussians1.append(results[2][1])
-        gaussians2.append(results[3][0])
-        gaussians2.append(results[3][1])
-        deflateurs.append(results[4])
-        deflateurs.append(results[5])
-        
+
+        simulatedCurves.extend((results[0], results[1]))
+        gaussians1.extend((results[2][0], results[2][1]))
+        gaussians2.extend((results[3][0], results[3][1]))
+        deflateurs.extend((results[4], results[5]))
     end = time()
     print("")
     print("FORWARD SCENARIO SIMULATION COMPLETE")
     print('-------------------------------')
-    print('Simulation successfully completed in '+ str(round((end- start)/60, 2)) + ' minutes')
-    
+    print(
+        f'Simulation successfully completed in {str(round((end - start) / 60, 2))} minutes'
+    )
+
     return([simulatedCurves, deflateurs, gaussians1, gaussians2])
         
 
@@ -1173,31 +1175,27 @@ def sobolSimulator(forwardCurve, fZero, gamma, a, b, c, d, eta, betas, delta,
     deflateurs = []
 
     # Import Sobol gaussians
-    gaussiansFull = pd.read_excel(loc + '\Analysis\Sobol Gaussians\SobolScrambled.xlsx').to_numpy()    
+    gaussiansFull = pd.read_excel(loc + '\Analysis\Sobol Gaussians\SobolScrambled.xlsx').to_numpy()
     gaussiansFull = [np.array([gaussians[:90], 
                       gaussians[90:]]).T for gaussians in gaussiansFull[:1500]]
-    
+
     for simu in np.arange(1500):
         results = UnitSimulator(forwardCurve, fZero, gamma, a, b, c, d, eta, betas, delta, 
                                 gaussiansFull[simu], 
                                 maxProjectionYear, maxMaturity)
-        
-        # Simulate
-        simulatedCurves.append(results[0])
-        simulatedCurves.append(results[1])
-        gaussians1.append(results[2][0])
-        gaussians1.append(results[2][1])
-        gaussians2.append(results[3][0])
-        gaussians2.append(results[3][1])
-        deflateurs.append(results[4])
-        deflateurs.append(results[5])
-        
+
+        simulatedCurves.extend((results[0], results[1]))
+        gaussians1.extend((results[2][0], results[2][1]))
+        gaussians2.extend((results[3][0], results[3][1]))
+        deflateurs.extend((results[4], results[5]))
     end = time()
     print("")
     print("FORWARD SCENARIO SIMULATION COMPLETE")
     print('-------------------------------')
-    print('Simulation successfully completed in '+ str(round((end- start)/60, 2)) + ' minutes')
-    
+    print(
+        f'Simulation successfully completed in {str(round((end - start) / 60, 2))} minutes'
+    )
+
     return([simulatedCurves, deflateurs, gaussians1, gaussians2])
  
 
@@ -1216,33 +1214,32 @@ def visualizeDistributions(simulatedCurves, delta, eta, maxMaturity = 40, maxPro
     ==================================================================================================='''
     # Sortir les prix Zero Coupon  
     zCoupons = copy.deepcopy(simulatedCurves)
-    
+
     # Transform Forwards to ZC
     for i in range(len(simulatedCurves)):
         for j in range(len(simulatedCurves[0])):
             zCoupons[i][j] = np.cumprod(1/(1+simulatedCurves[i][j]))
-    
+
     # Change to Time to Maturity - Select the diagonals
     ZCTimeToMaturity = copy.deepcopy(simulatedCurves)
-    for i in range(len(zCoupons)):
-        for j in range(maxMaturity): # Select the jth item from each vector ie the diagonals 
-            ZCTimeToMaturity[i][j] = [x[j] for x in zCoupons[i][:(len(zCoupons[i][0])-j)]]  #Vector of length maturity + projection - j
-    
-          
+    for i, j in itertools.product(range(len(zCoupons)), range(maxMaturity)):
+        ZCTimeToMaturity[i][j] = [x[j] for x in zCoupons[i][:(len(zCoupons[i][0])-j)]]  #Vector of length maturity + projection - j
+
+
     #Select the boundaries required
     ZCdistributions = np.zeros((maxMaturity*len(ZCTimeToMaturity), maxProjectionYear))
     for i in range(len(ZCTimeToMaturity)):
         for j in range(maxMaturity):
             ZCdistributions[i*maxMaturity+j] = np.array(ZCTimeToMaturity[i][j][:maxProjectionYear])
-                
+
     # Select the maturities we want to analyze
     distributionMaturities = [1, 5, 10, 20, 40]
     quantiles = [0.5, 1, 5, 10, 25, 50, 75, 90, 95, 99, 99.5]
-    
+
     finalZCDistributions = []
     finalRatesDistributions = []
     negativeRatesProportion = []
-    
+
     #Obtain all the distributions for each maturity
     for maturity in distributionMaturities:
         distribs =  ZCdistributions[np.arange(maturity - 1, len(ZCdistributions), maxMaturity)]
@@ -1250,46 +1247,56 @@ def visualizeDistributions(simulatedCurves, delta, eta, maxMaturity = 40, maxPro
         finalZCDistributions.append(np.percentile(distribs, quantiles, axis = 0))
         finalRatesDistributions.append(np.percentile(rates, quantiles, axis = 0))
         negativeRatesProportion.append(np.sum(rates.transpose() < 0, axis = 1)/len(simulatedCurves))
-        
+
     # Save Rates Distribution to Excel
     book = load_workbook(ratesDistribLocation)
     writer = pd.ExcelWriter(ratesDistribLocation, engine = 'openpyxl')
     writer.book = book
-    writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
-    
-    for i in range(len(finalRatesDistributions)):    
-        pd.DataFrame(list(reversed(finalRatesDistributions[i])), 
-                 index = list(reversed(quantiles))).to_excel(writer, 
-                                        "Rate Distributions "+ str(round(delta, 2)),
-                                        startcol = 1,
-                                        startrow = i*(len(quantiles)+3)+1,
-                                        index = True,
-                                        header = True)
-   
-        pd.DataFrame(negativeRatesProportion[i]).transpose().to_excel(writer, 
-                                        "Rate Distributions "+ str(round(delta, 2)),
-                                                                   startcol = 1,
-                                                                   startrow = i+71,
-                                                                   index = False,
-                                                                   header = False)
-        
+    writer.sheets = {ws.title: ws for ws in book.worksheets}
+
+    for i in range(len(finalRatesDistributions)):
+        pd.DataFrame(
+            list(reversed(finalRatesDistributions[i])),
+            index=list(reversed(quantiles)),
+        ).to_excel(
+            writer,
+            f"Rate Distributions {str(round(delta, 2))}",
+            startcol=1,
+            startrow=i * (len(quantiles) + 3) + 1,
+            index=True,
+            header=True,
+        )
+
+        pd.DataFrame(negativeRatesProportion[i]).transpose().to_excel(
+            writer,
+            f"Rate Distributions {str(round(delta, 2))}",
+            startcol=1,
+            startrow=i + 71,
+            index=False,
+            header=False,
+        )
+
     writer.save()
-    
+
     # Save ZeroCoupons Distribution to Excel
     book = load_workbook(zcDistribLocation)
     writer = pd.ExcelWriter(zcDistribLocation, engine = 'openpyxl')
     writer.book = book
-    writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
-    
+    writer.sheets = {ws.title: ws for ws in book.worksheets}
+
     for i in range(len(finalZCDistributions)):
-        pd.DataFrame(list(reversed(finalZCDistributions[i])), 
-                 index = list(reversed(quantiles))).to_excel(writer, 
-                                        "ZC Distributions "+ str(round(delta, 2)),
-                                        startcol = 1,
-                                        startrow = i*(len(quantiles)+3)+1,
-                                        index = True,
-                                        header = True)
-    
+        pd.DataFrame(
+            list(reversed(finalZCDistributions[i])),
+            index=list(reversed(quantiles)),
+        ).to_excel(
+            writer,
+            f"ZC Distributions {str(round(delta, 2))}",
+            startcol=1,
+            startrow=i * (len(quantiles) + 3) + 1,
+            index=True,
+            header=True,
+        )
+
     writer.save()
 
     
@@ -1418,29 +1425,29 @@ def BHUnitMonteCarloPayoff(forwardCurve, expiry, tenor, fZero, gamma, a, b, c, d
     dZ1, dZ2 = Gaussians obtained from the Moodys tool
     '''
     forwardCurve = np.array(forwardCurve)[:tenor+expiry-1]
-    timeSteps = len(forwardCurve) 
+    timeSteps = len(forwardCurve)
     dt = 1
-      
+
     # Set the forward Curve
     curve = np.array(forwardCurve)
     qCurve = np.power(curve + delta, 1 - eta)/(1 - eta)
-    
+
     # f and g vectors 
     fValues = fZero + (1 - fZero)*np.exp(- gamma * np.arange(len(forwardCurve)))
     gValues = ((a + b * np.arange(1, len(forwardCurve) +1)) * np.exp(- c * np.arange(1, len(forwardCurve) +1))) + d
-    
+
     # Product of g and betas (Since they have the same index)
     gBeta1 = gValues * betas[0, :tenor+expiry-1]
     gBeta2 = gValues * betas[1, :tenor+expiry-1]
 
     gaussians = np.array([dZ1[:tenor+expiry-1], dZ2[:tenor+expiry-1]]).transpose()
-    
+
     deflateur = zeroCouponCurve[0]
     DF = 1
-    
+
     # Loop to construct curves
     for t in range(1, expiry+1):
-        
+
         # Calculate Drift
         mu1 = np.array(fValues[t-1]*gBeta1[:len(gBeta1)-t+1]*
                              np.cumsum(fValues[t-1]*gBeta1[:len(gBeta1)-t+1]* np.power(curve + delta, eta)/
@@ -1449,9 +1456,9 @@ def BHUnitMonteCarloPayoff(forwardCurve, expiry, tenor, fZero, gamma, a, b, c, d
                              np.cumsum(fValues[t-1]*gBeta2[:len(gBeta2)-t+1]* np.power(curve + delta, eta)/
                                    (1 + curve)))
         mu = mu1 + mu2
-        
+
         fCurveSum = np.power(curve + delta, eta-1)
-        
+
         # Recalculate the qCurve as it should be
         # Construct Curve     
         qCurve = (qCurve
@@ -1460,23 +1467,21 @@ def BHUnitMonteCarloPayoff(forwardCurve, expiry, tenor, fZero, gamma, a, b, c, d
                                  np.power(fValues[t-1]*gBeta2[:len(gBeta2)-t+1], 2)))
                     + fValues[t-1]*gBeta1[:len(gBeta1)-t+1]*np.sqrt(dt)*gaussians[t-1, 0] 
                     + fValues[t-1]*gBeta2[:len(gBeta2)-t+1]*np.sqrt(dt)*gaussians[t-1, 1] )
-              
+
         # Find the discount factor at each timestep
         deflateur = deflateur * DF
         DF = 1/(1 + (np.power((1-eta)*qCurve[0], 1/(1-eta))) - delta)
-        
+
         qCurve = qCurve[1:] # Delete 1 year from curve
         curve = np.power((1-eta)*qCurve, 1/(1-eta)) - delta
-        
+
     # Move from Forward Curve to Swap Forward Rate 
     meanZCCurve = np.append([DF], DF * np.cumprod(1/(1+curve)))
     meanPVBP = np.sum(meanZCCurve)
     forwardSwap = (1 - meanZCCurve[len(meanZCCurve)-1])/meanPVBP
-      
+
     PVBPDeflated  = meanPVBP * deflateur
-    payoff = np.maximum(forwardSwap - strike, 0) * PVBPDeflated
-    
-    return(payoff)
+    return np.maximum(forwardSwap - strike, 0) * PVBPDeflated
 
 
 '''
@@ -1492,20 +1497,34 @@ def MonteCarloPricer(forwardCurve, expiry, tenor, fZero, gamma, a, b, c, d, eta,
 
     fZero, gamma, a, b, c, d = parameters for the volatility parametrization'''
     start = time()
-    payOff= []
     strike = forwardSwapRateCalib(expiry, tenor)
-    
-    for simu in np.arange(int(simulations/2)):
-        payOff.append(UnitMonteCarloPayoff(forwardCurve, expiry, tenor, fZero, gamma, a, b, c, d, eta, 
-                                      betas, delta, strike))
 
-    
-    price = np.nanmean(payOff) 
+    payOff = [
+        UnitMonteCarloPayoff(
+            forwardCurve,
+            expiry,
+            tenor,
+            fZero,
+            gamma,
+            a,
+            b,
+            c,
+            d,
+            eta,
+            betas,
+            delta,
+            strike,
+        )
+        for _ in np.arange(int(simulations / 2))
+    ]
+    price = np.nanmean(payOff)
     end = time()
-    
+
     timetaken = round((end -start)/60, 2)
-    print(str(expiry)+' X '+str(tenor)+ ' Simulation Completed: '+str(timetaken) + ' minutes')
-    
+    print(
+        f'{str(expiry)} X {str(tenor)} Simulation Completed: {str(timetaken)} minutes'
+    )
+
     return(price)
 
 
@@ -1520,19 +1539,36 @@ def MonteCarloPricerBH(forwardCurve, expiry, tenor, fZero, gamma, a, b, c, d, et
   
     fZero, gamma, a, b, c, d = parameters for the volatility parametrization'''
     start = time()
-    payOff= []
     strike = forwardSwapRateCalib(expiry, tenor)
-    
-    for simu in np.arange(int(len(gaussians1))):
-        payOff.append(BHUnitMonteCarloPayoff(forwardCurve, expiry, tenor, fZero, gamma, a, b, c, d, eta, 
-                                      betas, delta, gaussians1[simu], gaussians2[simu], strike))
 
-    end = time()    
+    payOff = [
+        BHUnitMonteCarloPayoff(
+            forwardCurve,
+            expiry,
+            tenor,
+            fZero,
+            gamma,
+            a,
+            b,
+            c,
+            d,
+            eta,
+            betas,
+            delta,
+            gaussians1[simu],
+            gaussians2[simu],
+            strike,
+        )
+        for simu in np.arange(len(gaussians1))
+    ]
+    end = time()
     price = np.nanmean(payOff)
-    
+
     timetaken = round((end -start)/60, 2)
-    print(str(expiry)+' X '+str(tenor)+ ' Simulation Completed: '+str(timetaken) + ' minutes')
-    
+    print(
+        f'{str(expiry)} X {str(tenor)} Simulation Completed: {str(timetaken)} minutes'
+    )
+
     return(price)
 
 
